@@ -11,7 +11,7 @@ import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 HOME = Path.home()
 
@@ -224,9 +224,17 @@ def clip(text, width):
 def render(sections, status, style):
     subtitles = {"global": "every project", "local": "{dir}", "project": "{dir}  shared in the repo"}
     rows = [v for s in sections for v in s["servers"]]
-    name_w = max((len(v["name"]) for v in rows), default=4)
+    for v in rows:
+        state = v.get("status")
+        v["_note"] = join_notes("repo only" if v["guarded"] else "", v["note"],
+                                state if state in ("failing", "needs approval") else "")
+    name_w = max((len(v["name"]) for v in rows), default=4) + 1
+    # Size the target column to its longest entry, shrinking only when the terminal is narrow
     cols = shutil.get_terminal_size((100, 24)).columns
-    target_w = max(cols - (2 + (2 if status else 0) + 8 + name_w + 1 + 6 + 1) - 28, 24)
+    note_w = max((len(v["_note"]) for v in rows), default=0)
+    room = cols - (2 + (2 if status else 0) + 8 + name_w + 1 + 6 + 1 + 2) - note_w
+    longest = max((len(v["target"]) for v in rows), default=0)
+    target_w = max(min(longest, room), 24)
     dots = {"ok": style.ok, "failing": style.bad, "needs approval": style.warn}
 
     lines = []
@@ -234,9 +242,7 @@ def render(sections, status, style):
         sub = subtitles[section["scope"]].format(dir=tilde(section["dir"]))
         lines += ["", f"{style.heading}{section['scope'].upper()}{style.reset}  {sub}"]
         for v in section["servers"]:
-            state = v.get("status")
-            note = join_notes("repo only" if v["guarded"] else "", v["note"],
-                              state if state in ("failing", "needs approval") else "")
+            state, note = v.get("status"), v["_note"]
             dot = ""
             if status:
                 dot = f"{dots[state]}●{style.reset} " if state in dots else "○ "

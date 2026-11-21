@@ -92,6 +92,12 @@ class McpsTest(unittest.TestCase):
         self.assertIn("repo only", out.stdout)
         self.assertNotIn("\033[", out.stdout)  # no color when not a terminal
 
+    def test_wide_terminal_does_not_stretch_rows(self):
+        env = {"HOME": str(self.home), "PATH": os.environ["PATH"], "COLUMNS": "300"}
+        out = subprocess.run([sys.executable, str(MCPS)], cwd=self.home, env=env,
+                             capture_output=True, text=True)
+        self.assertLess(max(len(line) for line in out.stdout.splitlines()), 100)
+
     def test_guard_runs_only_in_its_repo(self):
         ok = self.run_mcps("guard", str(self.repo), "--", "echo", "started", cwd=self.repo)
         self.assertEqual((ok.returncode, ok.stdout), (0, "started\n"))
